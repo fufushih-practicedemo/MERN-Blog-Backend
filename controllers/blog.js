@@ -212,11 +212,10 @@ exports.update  = (req, res)=> {
 
   Blog.findOne({slug}).exec((err, oldBlog) => {
     if(err) {
-      return res.json({
+      return res.status(400).json({
         error: errorHandler(err)
       })
     }
-
     let form = new formidable.IncomingForm()
     form.keepExtensions = true;
 
@@ -235,7 +234,7 @@ exports.update  = (req, res)=> {
 
       if (body) {
           oldBlog.excerpt = smartTrim(body, 320, ' ', ' ...');
-          oldBlog.mdesc = stripHtml(body.substring(0, 160));
+          oldBlog.mdesc = stripHtml(body.substring(0, 160)).result;
       }
 
       if (categories) {
@@ -253,13 +252,12 @@ exports.update  = (req, res)=> {
           })
         }
   
-        oldBlog.photo.data = fs.readFileSync(files.photo.filepath, 'utf8')
+        oldBlog.photo.data = fs.readFileSync(files.photo.filepath)
         oldBlog.photo.contentType = files.photo.type
       }
   
       oldBlog.save((err, result) => {
         if(err) {
-          // console.log(err)
           return res.status(400).json({
             error: errorHandler(err)
           })
