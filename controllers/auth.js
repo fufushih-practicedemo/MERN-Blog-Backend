@@ -4,6 +4,8 @@ const shortId = require('shortid')
 const jwt = require('jsonwebtoken')
 const {expressjwt} = require('express-jwt')
 const {errorHandler} = require('../helpers/dbErrorHandler')
+const _ = require('lodash');
+const nodeMailer = require("nodemailer");
 
 exports.signup = (req, res) => {
   User.findOne({email: req.body.email}).exec((err, user) => {
@@ -128,3 +130,100 @@ exports.canUpdateDeleteBlog = (req, res, next) => {
       next();
   });
 };
+
+exports.forgotPassword = (req, res) => {
+  const transporter = nodeMailer.createTransport({
+    host: "smtp.gmail.com",
+    port: 587,
+    secure: false,
+    requireTLS: true,
+    auth: {
+      user: "zx8714245@gmail.com", // MAKE SURE THIS EMAIL IS YOUR GMAIL FOR WHICH YOU GENERATED APP PASSWORD
+      pass: process.env.SEND_PASSWORD, // MAKE SURE THIS PASSWORD IS YOUR GMAIL APP PASSWORD WHICH YOU GENERATED EARLIER
+    },
+    tls: {
+      ciphers: "SSLv3",
+    },
+  });
+
+  const { email } = req.body;
+
+  User.findOne({ email }, (err, user) => {
+    if (err || !user) {
+      return res.status(401).json({
+        error: 'User with that email does not exist'
+      });
+    }
+
+    const token = jwt.sign({ _id: user._id }, process.env.JWT_RESET_PASSWORD, { expiresIn: '10m' });
+
+    // email
+    const emailData = {
+      from: process.env.EMAIL_FROM, // MAKE SURE THIS EMAIL IS YOUR GMAIL FOR WHICH YOU GENERATED APP PASSWORD
+      to: email, // WHO SHOULD BE RECEIVING THIS EMAIL? IT SHOULD BE YOUR GMAIL
+      subject: "Password reset link",
+      html: `
+        <p>Please use the following link to reset your password:</p>
+        <p>${process.env.CLIENT_URL}/auth/password/reset/${token}</p>
+        <hr />
+        <p>This email may contain sensetive information</p>
+        <p>https://seoblog.com</p>
+      `,
+    };
+    // populating the db > user > resetPasswordLink
+    return user.updateOne({ resetPasswordLink: token }, (err, success) => {
+      if (err) {
+        return res.json({ error: errorHandler(err) });
+      } else {
+        transporter
+          .sendMail(emailData)
+          .then((info) => {
+            console.log(`Message sent: ${info.response}`);
+            return res.json({
+              message: `Email has been sent to ${email}. Follow the instructions to reset your password. Link expires in 10min.`
+            });
+          })
+          .catch((err) => console.log(`Problem sending email: ${err}`));
+      }
+    });
+  });
+}
+
+exports.resetPassword = (req, res) => {
+  const {resetPasswordLink, newPassword} = req.body
+
+  if(resetPasswordLink) {
+    jwt.verify(resetPasswordLink, process.env.JWT_RESET_PASSWORD, (err, decoded) => {
+      if(err) {
+        return res.status(401).json({
+          error: 'Expired link. Try again'
+        })
+      }
+
+      User.findOne({resetPasswordLink}, (err, user) => {
+        if (err || !user) {
+          return res.status(401).json({
+            error: 'Something went wrong. Try later'
+          });
+        }
+        const updatedFields = {
+            password: newPassword,
+            resetPasswordLink: ''
+        };
+
+        user = _.extend(user, updatedFields);
+
+        user.save((err, result) => {
+          if (err) {
+            return res.status(400).json({
+              error: errorHandler(err)
+            });
+          }
+          res.json({
+            message: `Great! Now you can login with your new password`
+          });
+        });
+      })
+    })
+  }
+}

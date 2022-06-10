@@ -1,15 +1,17 @@
 const express = require('express')
 const router = express.Router()
-const { signup, signin, signout, requireSignin } = require('../controllers/auth')
+const { signup, signin, signout, forgotPassword, resetPassword } = require('../controllers/auth')
 
 // validators
 const {runValidation} = require('../middleware/validators')
-const {userSignupValidator, userSigninValidator} = require('../middleware/validators/auth')
+const {userSignupValidator, userSigninValidator, forgotPasswordValidator, resetPasswordValidator} = require('../middleware/validators/auth')
 
 
 router.post('/signup', userSignupValidator, runValidation, signup);
 router.post('/signin', userSigninValidator, runValidation, signin);
 router.get('/signout', signout);
+router.put('/forgot-password', forgotPasswordValidator, runValidation, forgotPassword)
+router.put('/reset-password', resetPasswordValidator, runValidation, resetPassword)
 
 // Test
 // router.get('/secret', requireSignin, (req, res) => {
